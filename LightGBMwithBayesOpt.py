@@ -26,7 +26,7 @@ class LightGBMwithBayesOpt():
             tmp = self.target_labels
             y1 = np.array([-1] * len(y))
             for i, v in enumerate(tmp):
-                y1[y == v] = i
+                y1[np.array(y) == v] = i
         self.X = X
         self.y = y
         self.num_y = y1
