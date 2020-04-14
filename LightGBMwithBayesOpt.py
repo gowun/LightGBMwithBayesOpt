@@ -128,8 +128,12 @@ class LightGBMEvalutor():
         self.X = X
         if y is not None:
             self.y = np.array(list(y))
+
+            ### 문자를 숫자로?!
             try:
                 if sorted(set(self.y))[0] <= 0:
+                    self.new_y = self.y
+                else:
                     self.new_y = self.y
             except TypeError:
                 self.new_y = self._convert_strY_to_intY(self.y)
