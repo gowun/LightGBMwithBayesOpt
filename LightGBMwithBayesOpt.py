@@ -19,7 +19,7 @@ class LightGBMwithBayesOpt():
         else:
             self.categorical_feature = categorical_feature
         self.target_labels = target_labels
-        self.label_dist = pd.value_counts(y)[self.target_labels]
+        self.label_dist = self._value_counts_by_given_keys(y, self.target_labels)
         try:
             y1 = np.array(list(map(lambda x: int(x), y)))
         except ValueError:
@@ -41,6 +41,13 @@ class LightGBMwithBayesOpt():
         self.pred_modes = pred_modes
         self.metrics = metrics
         self.thresholds = thresholds
+
+    def _value_counts_by_given_keys(self, target, keys):
+        tmp = pd.value_counts(target)
+        to_in = list(filter(lambda x: x not in keys, list(tmp.keys())))
+        for k in to_in:
+            tmp[k] = 0
+        return tmp[keys]
 
     def _decode_selective_param(self, param, value):
         return self.selective_params[param][int(round(value))]
