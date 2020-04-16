@@ -44,7 +44,7 @@ class LightGBMwithBayesOpt():
 
     def _value_counts_by_given_keys(self, target, keys):
         tmp = pd.value_counts(target)
-        to_in = list(filter(lambda x: x not in keys, list(tmp.keys())))
+        to_in = set(keys) - set(tmp.keys())
         for k in to_in:
             tmp[k] = 0
         return tmp[keys]
