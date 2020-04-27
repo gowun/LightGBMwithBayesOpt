@@ -34,12 +34,12 @@ class LightGBMwithBayesOpt():
         self.y = y
         if target_labels is not None:
             self.data_set = lgb.Dataset(X.loc[y1 >= 0], y1[y1 >= 0])
+            self.num_class = len(self.target_labels)
         else:
             self.data_set = lgb.Dataset(X, y)
         self.int_params = set(list(int_params) + list(selective_params.keys()))
         self.parameter_tuner = None
         self.n_tuning = n_tuning
-        self.num_class = len(self.target_labels)
         self.parameter_perf = []
         self.best_parameter = None
         self.metric_larger_better = metric_larger_better
