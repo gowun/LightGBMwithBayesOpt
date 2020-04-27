@@ -2,7 +2,7 @@ import lightgbm as lgb
 import pandas as pd
 import numpy as np
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import KFold, StratifiedKFold
 from bayes_opt import BayesianOptimization
 
 
@@ -68,7 +68,10 @@ class LightGBMwithBayesOpt():
         if params['objective'] in ['multiclass', 'multiclassova']:
             params['num_class'] = self.num_class
         print(params)
-        spts = StratifiedKFold(self.nfold)
+        if self.target_labels is None:
+            spts = KFold(self.nfold)
+        else:
+            spts = StratifiedKFold(self.nfold)
         result_df = []
         if self.target_labels is not None:
             nontarget_X, nontarget_y = self.X.loc[self.num_y == -1], self.num_y[self.num_y == -1]
