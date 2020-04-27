@@ -1,13 +1,14 @@
 import lightgbm as lgb
 import pandas as pd
 import numpy as np
-from sklearn.metrics import accuracy_score, matthews_corrcoef
+from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
 from sklearn.model_selection import StratifiedKFold
 from bayes_opt import BayesianOptimization
 
 
 class LightGBMwithBayesOpt():
-    def __init__(self, X, y, n_fold, rangeable_params, int_params, n_tuning, target_labels, selective_params=None, categorical_feature=None, metrics=['mcc'], metric_larger_better=True, pred_modes=['prob_first', 'rank_first'], thresholds=None):
+    def __init__(self, X, y, n_fold, rangeable_params, int_params, n_tuning, target_labels=None, selective_params=None, categorical_feature=None, 
+                 metrics=['mcc'], metric_larger_better=True, pred_modes=['prob_first', 'rank_first'], thresholds=None):
         self.nfold = n_fold
         self.selective_params = selective_params
         self.rangeable_params = rangeable_params
@@ -19,18 +20,22 @@ class LightGBMwithBayesOpt():
         else:
             self.categorical_feature = categorical_feature
         self.target_labels = target_labels
-        self.label_dist = self._value_counts_by_given_keys(y, self.target_labels)
-        try:
-            y1 = np.array(list(map(lambda x: int(x), y)))
-        except ValueError:
-            tmp = self.target_labels
-            y1 = np.array([-1] * len(y))
-            for i, v in enumerate(tmp):
-                y1[np.array(y) == v] = i
+        if target_labels is not None:
+            self.label_dist = self._value_counts_by_given_keys(y, self.target_labels)
+            try:
+                y1 = np.array(list(map(lambda x: int(x), y)))
+            except ValueError:
+                tmp = self.target_labels
+                y1 = np.array([-1] * len(y))
+                for i, v in enumerate(tmp):
+                    y1[np.array(y) == v] = i
+            self.num_y = y1
         self.X = X
         self.y = y
-        self.num_y = y1
-        self.data_set = lgb.Dataset(X.loc[y1 >= 0], y1[y1 >= 0])
+        if target_labels is not None:
+            self.data_set = lgb.Dataset(X.loc[y1 >= 0], y1[y1 >= 0])
+        else:
+            self.data_set = lgb.Dataset(X, y)
         self.int_params = set(list(int_params) + list(selective_params.keys()))
         self.parameter_tuner = None
         self.n_tuning = n_tuning
@@ -65,9 +70,12 @@ class LightGBMwithBayesOpt():
         print(params)
         spts = StratifiedKFold(self.nfold)
         result_df = []
-        nontarget_X, nontarget_y = self.X.loc[self.num_y == -1], self.num_y[self.num_y == -1]
-        print(len(nontarget_y))
-        X, y = self.X.loc[self.num_y >= 0].reset_index(drop=True), self.num_y[self.num_y >= 0]
+        if self.target_labels is not None:
+            nontarget_X, nontarget_y = self.X.loc[self.num_y == -1], self.num_y[self.num_y == -1]
+            print(len(nontarget_y))
+            X, y = self.X.loc[self.num_y >= 0].reset_index(drop=True), self.num_y[self.num_y >= 0]
+        else:
+            X, y = self.X, self.y
         for tr_idx, ts_idx in spts.split(X, y):
             tr_X, tr_y = X.iloc[tr_idx], np.array(y)[tr_idx]
             tr_set = lgb.Dataset(tr_X, tr_y)
@@ -90,22 +98,26 @@ class LightGBMwithBayesOpt():
 
     def _do_evaluate(self, model, X, y):
         eva = LightGBMEvalutor(model, X, self.target_labels, y)
-        scores_list = []
-        preds_list = []
         measures_dict = {}
-        for i, md in enumerate(self.pred_modes):
-            if md in ['prob_first', 'cut_off', 'top_percentile']:
-                raw_tf = False
-            elif md in ['rank_first']:
-                raw_tf = True
-            scores_list.append(eva.score_predict(raw=raw_tf))
-            if md in ['cut_off', 'top_percentile']:
-                thres = self.thresholds[i]
-            elif md in ['prob_first', 'rank_first']:
-                thres = None
-            preds_list.append(eva.label_predict(scores_list[-1], mode=md, threshold=thres))
-            for mt in self.metrics:
-                measures_dict[mt + '_' + md] = eva.measure_pred_with_true(preds_list[-1], mode=mt)
+        if self.target_labels is not None:
+            scores_list = []
+            preds_list = []
+            for i, md in enumerate(self.pred_modes):
+                if md in ['prob_first', 'cut_off', 'top_percentile']:
+                    raw_tf = False
+                elif md in ['rank_first']:
+                    raw_tf = True
+                scores_list.append(eva.score_predict(raw=raw_tf))
+                if md in ['cut_off', 'top_percentile']:
+                    thres = self.thresholds[i]
+                elif md in ['prob_first', 'rank_first']:
+                    thres = None
+                preds_list.append(eva.label_predict(scores_list[-1], mode=md, threshold=thres))
+                for mt in self.metrics:
+                    measures_dict[mt + '_' + md] = eva.measure_pred_with_true(preds_list[-1], mode=mt)
+        else:
+            pred_values = eva.value_predict()
+            measures_dict['l2'] = eva.measure_pred_with_true_value(pred_values)
         return measures_dict
 
     def do_parameter_tuning(self):
@@ -129,21 +141,25 @@ class LightGBMwithBayesOpt():
 
 
 class LightGBMEvalutor():
-    def __init__(self, model, X, target_labels, y=None, given_ids=None):
+    def __init__(self, model, X, target_labels=None, y=None, given_ids=None):
         self.target_labels = target_labels
         self.model = model
         self.X = X
-        if y is not None:
-            self.y = np.array(list(y))
+        if target_labels is None:
+            if y is not None:
+                self.y = y
+        else:
+            if y is not None:
+                self.y = np.array(list(y))
 
-            ### 문자를 숫자로?!
-            try:
-                if sorted(set(self.y))[0] <= 0:
-                    self.new_y = self.y
-                else:
-                    self.new_y = self.y
-            except TypeError:
-                self.new_y = self._convert_strY_to_intY(self.y)
+                ### 문자를 숫자로?!
+                try:
+                    if sorted(set(self.y))[0] <= 0:
+                        self.new_y = self.y
+                    else:
+                        self.new_y = self.y
+                except TypeError:
+                    self.new_y = self._convert_strY_to_intY(self.y)
         if given_ids is not None:
             self.ids = given_ids
 
@@ -162,6 +178,12 @@ class LightGBMEvalutor():
             return scores
         else:
             return pd.DataFrame(scores, columns=self.target_labels)
+
+    def value_predict(self):
+        return self.model.predict(self.X)
+
+    def measure_pred_with_true_value(self, pred_values):
+        return mean_squared_error(self.y, pred_values)
 
     def label_predict(self, scores, mode='prob_first', threshold=None, add_ids=False):
         """
