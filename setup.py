@@ -41,7 +41,7 @@ air = [
 setuptools.setup(
     name='LightGBMwithBayesOpt',
     version=__version__,
-    description='A Python toolkit of Deep Reinforcement Learning for Structured Data-Oriented Recommendation.',
+    description='A Python toolkit of light gbm with bayesian optimizer.',
     url='https://github.com/gowun/LightGBMwithBayesOpt.git',
     author="Gowun Jeong",
     author_email='gowun.jeong@gmail.com',
@@ -49,7 +49,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     python_requires=">=3.6",
     zip_safe=False,
-    long_description=open('README.md').read(),
+    #long_description=open('README.md').read(),
     install_requires=requires_list,
     classifiers=["Programming Language :: Python :: 3",
                  "License :: OSI Approved :: MIT License",
